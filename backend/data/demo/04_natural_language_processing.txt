@@ -1,0 +1,11 @@
+Natural Language Processing
+
+Natural language processing gives computers the ability to read, interpret and generate human language. It sits between linguistics, machine learning and information retrieval.
+
+Tokenization is the first step of nearly every natural language processing pipeline. Raw text is split into tokens, which are then lowercased, stripped of punctuation and optionally reduced to a root form by a stemming algorithm such as the Porter stemmer.
+
+Stop word removal discards extremely common words like the, is and of. These words appear in almost every document, so they carry very little discriminative power and they inflate the size of the index.
+
+Stemming and lemmatisation both reduce related words to a shared form. Stemming applies blunt suffix rules, so learning becomes learn, while lemmatisation uses a dictionary to produce a real word. Stemming is faster and is usually good enough for search.
+
+Language models predict the probability of a sequence of words. Modern transformer based language models are trained on very large corpora and can be used to rewrite queries, expand them with synonyms, or rerank the documents returned by a first stage retrieval system.

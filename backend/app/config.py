@@ -1,0 +1,95 @@
+"""Application configuration, loaded from environment variables."""
+
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BACKEND_ROOT.parent
+
+
+def _default_env_file() -> str:
+    """Prefer backend/.env, fall back to the repo-root .env."""
+    local = BACKEND_ROOT / ".env"
+    if local.exists():
+        return str(local)
+    return str(PROJECT_ROOT / ".env")
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=_default_env_file(), env_file_encoding="utf-8", extra="ignore"
+    )
+
+    app_name: str = "SwiftSearch API"
+    api_prefix: str = "/api"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    # Supabase (optional — the app falls back to local JSON storage when unset).
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_bucket: str = "swiftsearch-documents"
+
+    # BSBI defaults. block_size is the number of (term, doc) postings held in
+    # memory before a block is flushed to disk.
+    #
+    # 250 is deliberately small: the bundled demo corpus produces ~700 postings,
+    # so a small block forces several real flush/sort/merge cycles and the
+    # algorithm is actually observable. Raise it in Settings for real corpora —
+    # the resulting index is identical either way, only the block count changes.
+    block_size: int = 250
+    max_memory_mb: int = 512
+    language: str = "english"
+    use_stop_words: bool = True
+    use_stemming: bool = True
+
+    # BM25
+    bm25_k1: float = 1.2
+    bm25_b: float = 0.75
+
+    # Artificial pacing (seconds) so the indexing pipeline is observable in the
+    # UI. Set to 0 for maximum throughput.
+    index_step_delay: float = 0.12
+
+    @property
+    def data_dir(self) -> Path:
+        return Path(os.environ.get("SWIFTSEARCH_DATA_DIR", BACKEND_ROOT / ".data"))
+
+    @property
+    def blocks_dir(self) -> Path:
+        return self.data_dir / "blocks"
+
+    @property
+    def uploads_dir(self) -> Path:
+        return self.data_dir / "uploads"
+
+    @property
+    def index_dir(self) -> Path:
+        return self.data_dir / "index"
+
+    @property
+    def demo_dir(self) -> Path:
+        return BACKEND_ROOT / "data" / "demo"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def supabase_enabled(self) -> bool:
+        return bool(self.supabase_url and self.supabase_service_key)
+
+    def ensure_dirs(self) -> None:
+        for path in (self.data_dir, self.blocks_dir, self.uploads_dir, self.index_dir):
+            path.mkdir(parents=True, exist_ok=True)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    settings = Settings()
+    settings.ensure_dirs()
+    return settings

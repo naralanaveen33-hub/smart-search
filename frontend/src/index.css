@@ -1,0 +1,176 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------- tokens */
+/* Light theme: white ground, light gray hairlines, near-black text. */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #fafafa;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --text-subtle: #a1a1aa;
+  --accent: #6d28d9;
+  --accent-soft: #f5f3ff;
+  --accent-border: #ddd6fe;
+  --success: #15803d;
+  --success-soft: #f0fdf4;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --focus: #7c3aed;
+}
+
+/* Dark theme: near-black ground, one step lighter surfaces, subtle borders. */
+.dark {
+  --bg: #08080a;
+  --surface: #0e0e11;
+  --surface-2: #141418;
+  --border: #26262b;
+  --border-strong: #35353c;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --text-subtle: #71717a;
+  --accent: #a78bfa;
+  --accent-soft: #1a1424;
+  --accent-border: #3b2f57;
+  --success: #4ade80;
+  --success-soft: #0d1a12;
+  --warning: #fbbf24;
+  --warning-soft: #1d1608;
+  --danger: #f87171;
+  --danger-soft: #1e0f0f;
+  --focus: #a78bfa;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-border);
+  --color-ok: var(--success);
+  --color-ok-soft: var(--success-soft);
+  --color-warn: var(--warning);
+  --color-warn-soft: var(--warning-soft);
+  --color-bad: var(--danger);
+  --color-bad-soft: var(--danger-soft);
+
+  --radius-card: 8px;
+  --radius-control: 6px;
+
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+}
+
+/* ------------------------------------------------------------------ base */
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Numbers in metrics and tables must not jitter as they update. */
+  .tabular,
+  table,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3, h4 {
+    color: var(--text);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 6px;
+    border: 3px solid var(--bg);
+  }
+}
+
+@layer utilities {
+  /* One-line hairline separators used instead of shadows throughout. */
+  .card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+  }
+
+  .hairline {
+    border-color: var(--border);
+  }
+
+  .mark {
+    background-color: var(--accent-soft);
+    color: var(--accent);
+    border-bottom: 1px solid var(--accent-border);
+    padding: 0 1px;
+    border-radius: 2px;
+    font-weight: 500;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+/* Honour the OS reduced-motion setting: keep meaning, drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

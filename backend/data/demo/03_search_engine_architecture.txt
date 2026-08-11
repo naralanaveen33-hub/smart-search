@@ -1,0 +1,11 @@
+Search Engine Architecture
+
+A production search engine is built from a crawler, an indexer, a ranker and a query server. Each component can be scaled independently, and each has very different performance characteristics.
+
+The indexer is responsible for turning raw documents into an inverted index. Because the complete postings list of a web scale collection cannot fit in memory, the indexer uses external algorithms such as blocked sort based indexing, which builds sorted blocks on disk and merges them.
+
+The query server holds the index in memory or memory mapped from disk. When a query arrives it retrieves the postings lists for each query term, intersects or unions them depending on the search mode, and scores the resulting candidate documents.
+
+Caching is essential to fast search. Popular queries are answered from a result cache, while frequently accessed postings lists are held in a posting cache. A well tuned cache absorbs the majority of traffic.
+
+Latency budgets are strict. A search engine typically aims to answer a query in well under one hundred milliseconds, which is why the index layout, the compression scheme and the ranking function are all designed together.

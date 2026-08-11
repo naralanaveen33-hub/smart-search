@@ -1,0 +1,11 @@
+Blocked Sort Based Indexing
+
+Blocked sort based indexing, usually abbreviated BSBI, is an external indexing algorithm designed for collections that are far larger than the available memory.
+
+The algorithm proceeds in blocks. Documents are parsed into term document pairs and the pairs accumulate in a memory buffer. As soon as the buffer is full, the block is written to disk and the buffer is emptied so that parsing can continue. Nothing is ever required to fit in memory except a single block.
+
+Each block is then sorted by term. Because a block is small by construction, this sort happens entirely in memory and is therefore fast. The result is a collection of sorted runs stored as ordinary files on disk.
+
+The final phase is a multi way merge. The algorithm opens every sorted block, reads the smallest remaining record from each, and repeatedly emits the global minimum. Only one record per block is held in memory at any moment, so the merge scales to an arbitrary number of blocks.
+
+Because the merged stream arrives in term order, the postings list for each term is contiguous and can be written out in one pass. The result is a complete inverted index, built using a bounded amount of memory and a predictable number of sequential disk operations.

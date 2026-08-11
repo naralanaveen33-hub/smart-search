@@ -1,0 +1,11 @@
+Information Retrieval Basics
+
+Information retrieval is the science of finding relevant documents inside a large unstructured collection. A retrieval system accepts a query, consults an index, scores candidate documents and returns a ranked list.
+
+The central data structure of every retrieval system is the inverted index. It maps each term in the vocabulary to a postings list, which records the documents containing that term and often the positions of each occurrence.
+
+Ranking separates a search engine from a simple filter. Boolean retrieval answers whether a document matches, but ranked retrieval answers how well it matches. BM25 is the standard probabilistic ranking function, balancing term frequency, inverse document frequency and document length.
+
+Query processing mirrors document processing. The query is tokenized, normalized and stemmed with exactly the same pipeline used at indexing time, so that the terms in the query can be looked up in the index.
+
+Evaluation of an information retrieval system uses test collections of documents, queries and relevance judgements. Precision at ten and normalized discounted cumulative gain are widely reported metrics.

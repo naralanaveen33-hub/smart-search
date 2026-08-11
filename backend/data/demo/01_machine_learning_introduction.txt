@@ -1,0 +1,11 @@
+Machine Learning Introduction
+
+Machine learning is a field of artificial intelligence that studies algorithms which improve automatically through experience. Instead of writing explicit rules, a machine learning system learns statistical patterns directly from data.
+
+Supervised learning trains a model on labelled examples. The model observes pairs of inputs and correct outputs, and adjusts its parameters until its predictions match the labels. Classification and regression are the two classic supervised tasks.
+
+Unsupervised learning works without labels. Clustering algorithms group similar documents together, while dimensionality reduction compresses high dimensional vectors into a smaller space that is easier to search and visualise.
+
+Feature extraction matters enormously in text applications. A document must be converted into a numerical representation before a learning algorithm can use it. Bag of words models, term frequency weighting and learned embeddings are all common choices.
+
+Evaluation is the discipline that keeps machine learning honest. Precision, recall and mean average precision are standard measures in information retrieval, where a ranked list of documents is judged against human relevance assessments.

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Backend runtime data (blocks, uploads, index, local store)
+backend/.data/
+
+# Node
+node_modules/
+dist/
+*.local
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Browser-automation artifacts (console logs, page snapshots)
+.playwright-mcp/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,11 @@
+Inverted Index Explained
+
+An inverted index is the data structure that makes text search fast. Rather than scanning every document for every query, the engine looks up the query terms directly and immediately obtains the documents that contain them.
+
+The index has two parts. The dictionary holds every distinct term in the collection together with its document frequency. The postings list attached to each term records the identifiers of the documents containing it, usually in sorted order, along with term positions.
+
+Sorted postings lists are what make intersection cheap. Two sorted lists can be intersected in a single linear pass, so a boolean AND query over two terms costs time proportional to the length of the lists rather than the size of the collection.
+
+Positions inside a postings list enable phrase search. To match the phrase machine learning, the engine retrieves the postings for machine and for learning, then checks whether any position of learning is exactly one greater than a position of machine in the same document.
+
+Compression is applied aggressively. Document identifiers are stored as gaps and encoded with variable byte or Elias gamma codes, which shrinks the index enough that the hottest parts of it stay resident in memory.

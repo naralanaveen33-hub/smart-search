@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="SwiftSearch — a search engine built on Blocked Sort-Based Indexing with BM25 ranking." />
+    <meta name="theme-color" content="#08080a" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>SwiftSearch — Smart Search. Lightning Fast.</title>
+    <script>
+      // Apply the stored theme before first paint so there is no flash.
+      (function () {
+        try {
+          var stored = localStorage.getItem('swiftsearch-theme');
+          var dark = stored ? stored === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches;
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
