@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_bucket: str = "swiftsearch-documents"
 
+    # Load the bundled demo corpus on first start when the store is empty.
+    # Set SEED_DEMO_DOCUMENTS=false against a real project — otherwise the first
+    # boot writes six demo documents straight into production persistence.
+    seed_demo_documents: bool = True
+
     # BSBI defaults. block_size is the number of (term, doc) postings held in
     # memory before a block is flushed to disk.
     #

@@ -25,6 +25,7 @@ from ..models.schemas import (
     UploadResponse,
     VocabularyResponse,
 )
+from ..database.store import StorageUploadError
 from ..services.document_service import SUPPORTED_EXTENSIONS, UnsupportedFileType
 from ..services.engine import SUPPORTED_LANGUAGES, SwiftSearchEngine
 
@@ -49,8 +50,8 @@ def health(engine: SwiftSearchEngine = EngineDep) -> HealthResponse:
         status="ok",
         version="1.0.0",
         index_ready=engine.index is not None,
-        supabase=engine.store.using_supabase,
         documents=len(engine.documents.list_documents()),
+        **engine.store.status(),
     )
 
 
@@ -81,6 +82,10 @@ async def upload_documents(
         try:
             uploaded.append(engine.documents.add_document(name, content))
         except UnsupportedFileType as exc:
+            skipped.append({"file_name": name, "reason": str(exc)})
+        except StorageUploadError as exc:
+            # Report the real Storage error. Never count this file as uploaded:
+            # the row is not persisted and the object is not in the bucket.
             skipped.append({"file_name": name, "reason": str(exc)})
         except Exception as exc:  # parsing failures should not 500 the batch
             skipped.append({"file_name": name, "reason": f"Could not read file: {exc}"})

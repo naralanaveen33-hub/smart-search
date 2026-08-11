@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 from ..config import Settings
-from ..database.store import Store, utc_now
+from ..database.store import StorageUploadError, Store, utc_now
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx"}
 
@@ -143,9 +143,23 @@ class DocumentService:
         return self.settings.uploads_dir / f"{doc_id}.txt"
 
     def read_text(self, doc_id: str) -> str:
+        """Extracted text for one document, cheapest source first.
+
+        Local cache -> Supabase `documents.text` -> local store row. Text pulled
+        from Supabase is written to the local cache so a full index build costs
+        one fetch per document rather than one per read. The original uploaded
+        file in Storage is never downloaded or re-parsed here.
+        """
         path = self._text_path(doc_id)
         if path.exists():
             return path.read_text(encoding="utf-8")
+
+        remote_text = self.store.fetch_document_text(doc_id)
+        if remote_text:
+            self.settings.uploads_dir.mkdir(parents=True, exist_ok=True)
+            path.write_text(remote_text, encoding="utf-8")
+            return remote_text
+
         for row in self.store.list_documents():
             if row.get("id") == doc_id:
                 return row.get("text", "")
@@ -171,9 +185,16 @@ class DocumentService:
         self.settings.uploads_dir.mkdir(parents=True, exist_ok=True)
         self._text_path(doc_id).write_text(text, encoding="utf-8")
 
-        storage_url = self.store.upload_to_storage(
-            f"{doc_id}/{file_name}", content, "application/octet-stream"
-        )
+        # A Storage failure aborts the whole document: the extracted text is
+        # discarded and the error propagates, so the caller is never told an
+        # upload succeeded when the original file is not in the bucket.
+        try:
+            storage_url = self.store.upload_to_storage(
+                f"{doc_id}/{file_name}", content, "application/octet-stream"
+            )
+        except StorageUploadError:
+            self._text_path(doc_id).unlink(missing_ok=True)
+            raise
 
         row = {
             "id": doc_id,
@@ -188,14 +209,19 @@ class DocumentService:
             "storage_url": storage_url,
             "preview": text[:180].strip(),
         }
-        self.store.add_document(row)
+        # `text` is persisted remotely but kept out of the local mirror, which
+        # already holds it as a file under .data/uploads/.
+        self.store.add_document(row, text=text)
         return row
 
     def delete_document(self, doc_id: str) -> None:
         path = self._text_path(doc_id)
         if path.exists():
             path.unlink()
-        self.store.delete_document(doc_id)
+        row = next(
+            (r for r in self.store.list_documents() if r.get("id") == doc_id), None
+        )
+        self.store.delete_document(doc_id, file_name=(row or {}).get("file_name"))
 
     def mark_indexed(self, doc_lengths: dict[str, int]) -> None:
         docs = self.store.list_documents()

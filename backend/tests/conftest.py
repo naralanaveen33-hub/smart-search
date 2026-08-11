@@ -10,13 +10,29 @@ import pytest
 
 @pytest.fixture()
 def temp_data_dir(monkeypatch: pytest.MonkeyPatch):
-    """Isolate every test from the developer's real .data directory."""
+    """Isolate every test from the developer's real .data directory.
+
+    Supabase credentials are cleared too. Without this the suite reads the
+    repo's .env and every Store() built during a test talks to the real
+    project — writing demo documents, search history and index runs into live
+    data on every run. Supabase behaviour is covered separately in
+    test_supabase_store.py using a fake remote, so nothing is lost.
+    """
     directory = Path(tempfile.mkdtemp(prefix="swiftsearch-test-"))
     monkeypatch.setenv("SWIFTSEARCH_DATA_DIR", str(directory))
+    monkeypatch.setenv("SUPABASE_URL", "")
+    monkeypatch.setenv("SUPABASE_SERVICE_KEY", "")
+    # Pin every environment-driven default the suite depends on. A developer
+    # .env pointing at a real project sets SEED_DEMO_DOCUMENTS=false, which
+    # would otherwise leave the corpus empty and fail ~26 tests for reasons
+    # that have nothing to do with the code under test.
+    monkeypatch.setenv("SEED_DEMO_DOCUMENTS", "true")
     from app.config import get_settings
 
     get_settings.cache_clear()
     settings = get_settings()
+    assert not settings.supabase_enabled, "tests must never touch a live Supabase project"
+    assert settings.seed_demo_documents, "tests rely on the bundled demo corpus"
     yield settings
     get_settings.cache_clear()
     shutil.rmtree(directory, ignore_errors=True)

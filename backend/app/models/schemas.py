@@ -17,6 +17,11 @@ class HealthResponse(BaseModel):
     index_ready: bool
     supabase: bool
     documents: int
+    # Which backend is actually live, plus the last non-secret Supabase error.
+    # Without these a misconfigured project is indistinguishable from an
+    # unconfigured one — both simply serve local JSON.
+    storage: Literal["supabase", "local"] = "local"
+    supabase_error: str | None = None
 
 
 class DocumentSummary(BaseModel):

@@ -75,7 +75,8 @@ class SwiftSearchEngine:
 
     def bootstrap(self) -> None:
         """Called on startup: seed demo docs and reload any existing index."""
-        self.documents.seed_demo_documents()
+        if self.settings.seed_demo_documents:
+            self.documents.seed_demo_documents()
         loaded = InvertedIndex.load(self.settings.index_dir / "index.json")
         if loaded is not None and loaded.num_docs:
             self.index = loaded
