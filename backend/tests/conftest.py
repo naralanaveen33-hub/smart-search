@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -40,11 +41,24 @@ def temp_data_dir(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture()
 def client(temp_data_dir):
+    """A started app, settled.
+
+    Startup recovery rebuilds the index whenever documents exist without one,
+    which is true of every fresh test data directory. A real deployment settles
+    within seconds; tests wait for the same thing so they act on a steady state
+    rather than racing the rebuild.
+    """
     from fastapi.testclient import TestClient
 
     from app.main import create_app
 
     with TestClient(create_app()) as test_client:
+        for _ in range(500):
+            if test_client.get("/api/index/status").json()["state"] != "running":
+                break
+            time.sleep(0.02)
+        else:
+            raise AssertionError("startup index rebuild did not finish")
         yield test_client
 
 

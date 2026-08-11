@@ -45,10 +45,23 @@ async def lifespan(app: FastAPI):
         logger.warning(
             "Supabase unavailable (%s) — using local storage.", engine.store.remote_error
         )
+
+    # The index lives on ephemeral disk; the corpus does not. Rebuild in the
+    # background rather than serving 409s until someone clicks "Build Index".
+    await engine.recover_index_if_missing()
+
+    if settings.supabase_enabled and not settings.admin_protected:
+        logger.warning(
+            "ADMIN_TOKEN is not set: document delete, index reset and demo seed "
+            "are reachable by anyone who can reach this API. Set ADMIN_TOKEN for "
+            "any internet-facing deployment."
+        )
+
     logger.info(
-        "SwiftSearch ready — %d documents, storage=%s",
+        "SwiftSearch ready — %d documents, storage=%s, index=%s",
         len(engine.documents.list_documents()),
         "supabase" if engine.store.using_supabase else "local",
+        "ready" if engine.index is not None else engine.state,
     )
     yield
 

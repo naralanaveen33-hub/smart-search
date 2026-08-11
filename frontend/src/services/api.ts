@@ -17,6 +17,32 @@ import type {
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
 
+/**
+ * Shared secret for the endpoints that destroy data (document delete, index
+ * reset, demo seed). It is entered by the operator under Settings and kept in
+ * localStorage — it is never baked into the bundle, so a visitor who has not
+ * been given the token simply cannot reach those endpoints.
+ */
+const ADMIN_TOKEN_KEY = 'swiftsearch-admin-token'
+
+export function getAdminToken(): string {
+  try {
+    return window.localStorage.getItem(ADMIN_TOKEN_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function setAdminToken(token: string): void {
+  try {
+    const trimmed = token.trim()
+    if (trimmed) window.localStorage.setItem(ADMIN_TOKEN_KEY, trimmed)
+    else window.localStorage.removeItem(ADMIN_TOKEN_KEY)
+  } catch {
+    /* storage unavailable — the header is simply omitted */
+  }
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -28,11 +54,16 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAdminToken()
+  const headers: Record<string, string> = {}
+  if (!(init?.body instanceof FormData)) headers['Content-Type'] = 'application/json'
+  if (token) headers['X-Admin-Token'] = token
+
   let response: Response
   try {
     response = await fetch(`${BASE}${path}`, {
-      headers: init?.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
       ...init,
+      headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
     })
   } catch {
     throw new ApiError('Cannot reach the SwiftSearch backend. Is it running?', 0)

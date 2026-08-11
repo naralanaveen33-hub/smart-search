@@ -1,0 +1,62 @@
+# Render service definition for the SwiftSearch API.
+#
+# Render reads this from the repository root. Create the service with
+# "New +" -> "Blueprint" and point it at this repo, or configure a Web Service
+# by hand with the same rootDir / build / start commands.
+#
+# Secrets are declared with `sync: false`, which means Render prompts for them
+# in the dashboard and never stores them in this file.
+
+services:
+  - type: web
+    name: swiftsearch-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    # requirements.txt is pinned; requirements-dev.txt (pytest) is not installed.
+    buildCommand: pip install -r requirements.txt
+    # 0.0.0.0 and $PORT are both required — the default uvicorn bind of
+    # 127.0.0.1:8000 is unreachable from outside the container.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Must match backend/runtime.txt.
+      - key: PYTHON_VERSION
+        value: 3.12.13
+
+      # --- Supabase (set in the Render dashboard; never committed) ----------
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: swiftsearch-documents
+
+      # --- Required for a browser on another origin to call this API --------
+      # Comma-separated. Replace with your real frontend URL, e.g.
+      #   https://swiftsearch.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+
+      # --- Guards the destructive endpoints (delete / reset / seed) ---------
+      # Generate one with:  python -c "import secrets; print(secrets.token_urlsafe(32))"
+      - key: ADMIN_TOKEN
+        sync: false
+
+      # --- Production behaviour --------------------------------------------
+      # Never write the six demo documents into a real Supabase project.
+      - key: SEED_DEMO_DOCUMENTS
+        value: "false"
+      # The 0.12s pacing exists to make indexing watchable in a demo. At a few
+      # thousand documents it adds minutes of pure sleep — turn it off here.
+      - key: INDEX_STEP_DELAY
+        value: "0"
+      # The index lives on the container's ephemeral disk. Rebuild it from the
+      # documents in Supabase when an instance starts without one.
+      - key: AUTO_REBUILD_INDEX
+        value: "true"
+      # Larger blocks for a real corpus. The resulting index is identical
+      # either way; only the number of blocks changes.
+      - key: BLOCK_SIZE
+        value: "10000"

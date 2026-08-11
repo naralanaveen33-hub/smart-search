@@ -143,9 +143,15 @@ export function IndexingProvider({ children }: { children: ReactNode }) {
   )
 
   const reset = useCallback(async () => {
-    setStatus(await api.resetIndex())
-    setPulse(null)
-    setError(null)
+    try {
+      setStatus(await api.resetIndex())
+      setPulse(null)
+      setError(null)
+    } catch (err) {
+      // Reset is admin-guarded on protected deployments, and refused while a
+      // build is running. Either way the user needs to be told why.
+      setError(err instanceof Error ? err.message : 'Could not reset the index')
+    }
   }, [])
 
   const stageOf = useCallback(

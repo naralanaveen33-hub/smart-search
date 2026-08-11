@@ -115,7 +115,7 @@ backend/
     database/store.py        Supabase, with local JSON fallback
   data/demo/                 bundled corpus
 supabase/schema.sql          optional Postgres schema
-  tests/                     103 pytest tests
+  tests/                     138 pytest tests
 
 frontend/src/
   components/  ui/ layout/ viz/ search/ presentation/
@@ -183,11 +183,110 @@ Failures are never silent. An unreachable project is logged at **error** on star
 
 ---
 
+---
+
+## Deploying
+
+Three pieces: a static frontend, a Python API, and Supabase. No Docker.
+
+```
+Vercel  (React build)   ──VITE_API_URL──▶  Render  (FastAPI)  ──▶  Supabase
+  frontend/vercel.json                      render.yaml              Postgres + Storage
+```
+
+### 1. Supabase
+
+Run `supabase/schema.sql` (SQL editor, or `psql "$SUPABASE_DB_URL" -f supabase/schema.sql`).
+It creates `documents`, `search_history` and `index_runs`, enables RLS with no
+permissive policies, and creates the private `swiftsearch-documents` bucket.
+
+From Project Settings → API you need the **project URL** and the **service role
+key**. The service key is a backend-only secret — it must never appear in the
+frontend, in the repo, or in a `VITE_*` variable.
+
+### 2. Backend on Render
+
+New → Blueprint, pointed at this repo; Render reads `render.yaml`. Or create a
+Web Service by hand with:
+
+| Setting | Value |
+| --- | --- |
+| Root directory | `backend` |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health check | `/api/health` |
+
+`--host 0.0.0.0 --port $PORT` is not optional: uvicorn otherwise binds
+`127.0.0.1:8000`, which is unreachable from outside the container.
+
+Environment variables to set in the dashboard:
+
+| Variable | Value |
+| --- | --- |
+| `SUPABASE_URL` | your project URL |
+| `SUPABASE_SERVICE_KEY` | service role key (secret) |
+| `SUPABASE_BUCKET` | `swiftsearch-documents` |
+| `CORS_ORIGINS` | your frontend URL, e.g. `https://swiftsearch.vercel.app` |
+| `ADMIN_TOKEN` | `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `SEED_DEMO_DOCUMENTS` | `false` |
+| `INDEX_STEP_DELAY` | `0` |
+| `BLOCK_SIZE` | `10000` |
+| `PYTHON_VERSION` | `3.12.13` |
+
+### 3. Frontend on Vercel
+
+Import the repo with **root directory `frontend`**. `frontend/vercel.json`
+supplies the build settings and the SPA rewrite that keeps `/search` and
+`/results` working on refresh.
+
+Set one environment variable, for Production and Preview:
+
+```
+VITE_API_URL = https://<your-render-service>.onrender.com/api
+```
+
+Vite inlines `VITE_*` at **build time**, so changing it later requires a
+redeploy. Without it the bundle requests a relative `/api`, which hits Vercel
+instead of your API and 404s.
+
+Deploy the backend first so you have its URL, then set `CORS_ORIGINS` on Render
+to the Vercel URL once that exists.
+
+### 4. Finish
+
+Open the site → **Settings → Admin access** → paste the `ADMIN_TOKEN`. It is
+kept in that browser's localStorage only; visitors without it can search and
+browse but cannot delete documents or reset the index.
+
+### What happens on a restart
+
+Hosting platforms wipe the container filesystem on every deploy, and free tiers
+also spin down when idle. The corpus is safe — documents, extracted text,
+history and run metadata all live in Supabase — but the inverted index and its
+block files do not survive.
+
+On startup, an instance that finds documents and no index rebuilds one in the
+background (`AUTO_REBUILD_INDEX=true`, the default). Search reports the index as
+missing for the few seconds that takes, then works normally. Roughly 6 seconds
+for 3,000 documents with `INDEX_STEP_DELAY=0`.
+
+### Known limits at this scale
+
+- Measured: ~3,000 documents produce a ~17 MB `index.json` and ~90 MB of
+  process memory. Comfortable on a 512 MB instance; the index is held in
+  memory, so this grows with the corpus.
+- Uploads are read fully into memory before the 20 MB limit is checked.
+- Only `DELETE /documents/{id}`, `POST /index/reset` and `POST /documents/seed`
+  are access-controlled. Reading, searching and uploading are open to anyone
+  who can reach the API.
+
+---
+
 ## Tests
 
 ```bash
-cd backend  && .venv/bin/python -m pytest      # 103 tests
-cd frontend && npm test                        # 25 tests
+cd backend  && .venv/bin/python -m pytest      # 138 tests
+cd frontend && npm test                        # 29 tests
 cd frontend && npm run typecheck
 ```
 
