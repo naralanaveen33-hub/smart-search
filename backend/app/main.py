@@ -50,6 +50,20 @@ async def lifespan(app: FastAPI):
     # background rather than serving 409s until someone clicks "Build Index".
     await engine.recover_index_if_missing()
 
+    # Print the CORS allow-list. A deployed frontend missing from it is the
+    # single most common cause of "cannot reach the backend" while every
+    # endpoint is in fact healthy, and it is invisible without this line.
+    logger.info("CORS allowed origins: %s", ", ".join(settings.cors_origin_list) or "(none)")
+    if settings.supabase_enabled and not any(
+        o.startswith("https://") for o in settings.cors_origin_list
+    ):
+        logger.warning(
+            "CORS_ORIGINS contains no https:// origin (%s). A deployed frontend "
+            "will be blocked by the browser even though this API is healthy — "
+            "set CORS_ORIGINS to your frontend URL.",
+            ", ".join(settings.cors_origin_list) or "empty",
+        )
+
     if settings.supabase_enabled and not settings.admin_protected:
         logger.warning(
             "ADMIN_TOKEN is not set: document delete, index reset and demo seed "
@@ -78,7 +92,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+        allow_origin_regex=settings.cors_allow_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

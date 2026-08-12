@@ -90,7 +90,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
     })
   } catch {
-    throw new ApiError('Cannot reach the SwiftSearch backend. Is it running?', 0)
+    // fetch() rejects with an opaque TypeError for every network-level
+    // failure, and the browser deliberately withholds the reason. For a
+    // cross-origin API the overwhelmingly common cause is CORS: the request
+    // reached the server and was answered, but the response lacked an
+    // Access-Control-Allow-Origin header, so the browser discarded it. Saying
+    // only "is it running?" sends people to check a backend that is healthy.
+    const crossOrigin = BASE.startsWith('http') && !BASE.startsWith(window.location.origin)
+    throw new ApiError(
+      crossOrigin
+        ? `Could not reach the API at ${BASE}. Either it is down, or it is not allowing ` +
+          `requests from ${window.location.origin} — add that origin to CORS_ORIGINS on the ` +
+          'backend. The browser console will show a CORS error if that is the cause.'
+        : 'Cannot reach the SwiftSearch backend. Is it running?',
+      0,
+    )
   }
 
   if (!response.ok) {
