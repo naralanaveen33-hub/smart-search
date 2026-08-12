@@ -19,7 +19,7 @@ interface Pending {
 export function DocumentsPage() {
   const navigate = useNavigate()
   const { start, status } = useIndexing()
-  const { data, loading, reload } = useAsync(() => api.listDocuments(), [])
+  const { data, loading, error: loadError, reload } = useAsync(() => api.listDocuments(), [])
   const [pending, setPending] = useState<Pending[]>([])
   const [dragging, setDragging] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'info' | 'error'; text: string } | null>(null)
@@ -92,6 +92,12 @@ export function DocumentsPage() {
         description="Add documents to build your search index. Supported formats: TXT, PDF, DOCX and MD."
       />
 
+      {loadError && (
+        <Banner tone="error">
+          Could not load the corpus — {loadError}. The documents below may be incomplete;
+          nothing has been deleted.
+        </Banner>
+      )}
       {notice && <Banner tone={notice.tone === 'error' ? 'error' : 'info'}>{notice.text}</Banner>}
 
       {/* Drop zone — the whole box is the click target, not just the link inside it. */}
@@ -222,6 +228,13 @@ export function DocumentsPage() {
               <div key={n} className="mb-2 h-10 animate-pulse rounded-[6px] bg-surface-2" />
             ))}
           </div>
+        ) : loadError ? (
+          <EmptyState
+            icon={<FileText size={22} />}
+            title="Corpus unavailable"
+            description="The backend could not be reached, so the document list could not be loaded. Your documents are safe."
+            action={<Button onClick={reload}>Try again</Button>}
+          />
         ) : documents.length === 0 ? (
           <EmptyState
             icon={<FileText size={22} />}
@@ -230,8 +243,15 @@ export function DocumentsPage() {
             action={
               <Button
                 onClick={async () => {
-                  await api.seedDocuments()
-                  reload()
+                  try {
+                    await api.seedDocuments()
+                    reload()
+                  } catch (err) {
+                    setNotice({
+                      tone: 'error',
+                      text: err instanceof Error ? err.message : 'Could not load demo documents',
+                    })
+                  }
                 }}
               >
                 Load demo documents
@@ -287,8 +307,15 @@ export function DocumentsPage() {
                         type="button"
                         aria-label={`Delete ${doc.title}`}
                         onClick={async () => {
-                          await api.deleteDocument(doc.id)
-                          reload()
+                          try {
+                            await api.deleteDocument(doc.id)
+                            reload()
+                          } catch (err) {
+                            setNotice({
+                              tone: 'error',
+                              text: err instanceof Error ? err.message : 'Could not delete document',
+                            })
+                          }
                         }}
                         className="text-subtle transition-colors hover:text-[var(--danger)]"
                       >

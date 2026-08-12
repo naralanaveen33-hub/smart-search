@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SearchMode = Literal["all", "and", "or", "phrase"]
 SortMode = Literal["relevance", "newest", "oldest"]
@@ -22,6 +22,9 @@ class HealthResponse(BaseModel):
     # unconfigured one — both simply serve local JSON.
     storage: Literal["supabase", "local"] = "local"
     supabase_error: str | None = None
+    # True when destructive endpoints require the admin token. Only the fact is
+    # exposed, never the token itself.
+    admin_protected: bool = False
 
 
 class DocumentSummary(BaseModel):
@@ -157,6 +160,20 @@ class SearchRequest(BaseModel):
     # Omit `limit` to use the configured results_per_page setting.
     limit: int | None = Field(default=None, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
+
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_blank(cls, value: str) -> str:
+        """Reject whitespace-only queries.
+
+        They retrieve nothing and would be written to search history as an
+        empty string, which the Postgres check constraint on
+        `search_history.query` rejects.
+        """
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Query must contain at least one non-whitespace character")
+        return stripped
 
 
 class RankingSignal(BaseModel):

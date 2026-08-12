@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -43,6 +44,39 @@ def get_engine(request: Request) -> SwiftSearchEngine:
 
 EngineDep = Depends(get_engine)
 
+ADMIN_HEADER = "X-Admin-Token"
+
+
+def require_admin(
+    request: Request, engine: SwiftSearchEngine = EngineDep
+) -> None:
+    """Guard the endpoints that destroy data.
+
+    Deleting a document, resetting the index and seeding the demo corpus all
+    discard or overwrite real state, so they are gated behind a shared secret.
+    When ADMIN_TOKEN is unset the guard is inert — that keeps local development
+    frictionless, and startup logs a warning so an unprotected deployment is
+    never silent.
+    """
+    settings = engine.settings
+    if not settings.admin_protected:
+        return
+
+    supplied = request.headers.get(ADMIN_HEADER, "")
+    # compare_digest keeps the check constant-time.
+    if not supplied or not secrets.compare_digest(supplied, settings.admin_token):
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "This action requires the admin token. Add it under "
+                "Settings → Admin access."
+            ),
+            headers={"WWW-Authenticate": ADMIN_HEADER},
+        )
+
+
+AdminDep = Depends(require_admin)
+
 
 @router.get("/health", response_model=HealthResponse)
 def health(engine: SwiftSearchEngine = EngineDep) -> HealthResponse:
@@ -51,6 +85,7 @@ def health(engine: SwiftSearchEngine = EngineDep) -> HealthResponse:
         version="1.0.0",
         index_ready=engine.index is not None,
         documents=len(engine.documents.list_documents()),
+        admin_protected=engine.settings.admin_protected,
         **engine.store.status(),
     )
 
@@ -95,7 +130,7 @@ async def upload_documents(
     return UploadResponse(uploaded=uploaded, skipped=skipped)
 
 
-@router.delete("/documents/{doc_id}")
+@router.delete("/documents/{doc_id}", dependencies=[AdminDep])
 def delete_document(doc_id: str, engine: SwiftSearchEngine = EngineDep) -> dict:
     engine.documents.delete_document(doc_id)
     return {"deleted": doc_id}
@@ -112,7 +147,7 @@ def document_text(doc_id: str, engine: SwiftSearchEngine = EngineDep) -> dict:
     return {"id": doc_id, "title": meta.get("title", doc_id), "text": text}
 
 
-@router.post("/documents/seed")
+@router.post("/documents/seed", dependencies=[AdminDep])
 def seed_documents(engine: SwiftSearchEngine = EngineDep) -> dict:
     added = engine.documents.seed_demo_documents()
     return {"added": added}
@@ -141,7 +176,7 @@ async def start_index(
     return IndexStatusResponse(**engine.status())
 
 
-@router.post("/index/reset", response_model=IndexStatusResponse)
+@router.post("/index/reset", response_model=IndexStatusResponse, dependencies=[AdminDep])
 def reset_index(engine: SwiftSearchEngine = EngineDep) -> IndexStatusResponse:
     if engine.is_running:
         raise HTTPException(status_code=409, detail="Cannot reset while indexing is running.")

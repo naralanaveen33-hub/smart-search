@@ -3,7 +3,7 @@ import { Check, Info, Moon, Sun } from 'lucide-react'
 import { Banner, Button, Card, Input, SectionTitle, Select, Toggle } from '@/components/ui'
 import { useAsync } from '@/hooks/useAsync'
 import { useTheme } from '@/hooks/useTheme'
-import { api } from '@/services/api'
+import { api, getAdminToken, setAdminToken } from '@/services/api'
 import type { AppSettings } from '@/types'
 import { classNames } from '@/utils/format'
 
@@ -11,6 +11,9 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { data, loading, error, reload } = useAsync(() => api.settings(), [])
   const { data: languages } = useAsync(() => api.languages(), [])
+  const { data: health } = useAsync(() => api.health(), [])
+  const [adminToken, setAdminTokenState] = useState(() => getAdminToken())
+  const [tokenSaved, setTokenSaved] = useState(false)
   const [draft, setDraft] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -100,6 +103,49 @@ export function SettingsPage() {
           </div>
         </div>
       </Card>
+
+      {health?.admin_protected && (
+        <Card>
+          <h2 className="text-[13px] font-semibold">Admin access</h2>
+          <p className="mt-0.5 text-[12px] text-muted">
+            This deployment requires an admin token to delete documents or reset the index.
+            The token is stored in this browser only and is never part of the app bundle.
+          </p>
+          <div className="mt-3 flex items-end gap-2">
+            <div className="flex-1">
+              <label htmlFor="admin-token" className="text-[12px] text-muted">
+                Admin token
+              </label>
+              <Input
+                id="admin-token"
+                type="password"
+                autoComplete="off"
+                placeholder="Paste your admin token"
+                value={adminToken}
+                onChange={(e) => {
+                  setAdminTokenState(e.target.value)
+                  setTokenSaved(false)
+                }}
+                className="mt-1"
+              />
+            </div>
+            <Button
+              onClick={() => {
+                setAdminToken(adminToken)
+                setTokenSaved(true)
+              }}
+            >
+              Save token
+            </Button>
+          </div>
+          {tokenSaved && (
+            <p className="mt-2 flex items-center gap-1.5 text-[12px] text-[var(--success)]">
+              <Check size={13} />
+              Token stored in this browser
+            </p>
+          )}
+        </Card>
+      )}
 
       {draft && (
         <>

@@ -92,6 +92,43 @@ class SwiftSearchEngine:
                 len(recovered),
             )
 
+    async def recover_index_if_missing(self) -> bool:
+        """Rebuild the index at startup when documents exist but the index does not.
+
+        The corpus survives in Supabase; the inverted index and its blocks live
+        on local disk, which most hosting platforms wipe on every deploy and
+        cold start. Without this, a restarted instance shows a full document
+        list while every search returns 409.
+
+        Runs in the background — `start_indexing` schedules a task and returns —
+        so startup is never blocked. Progress is published on the usual SSE
+        stream, so the UI shows a normal indexing run.
+        """
+        if self.index is not None or self.is_running:
+            return False
+        if not self.settings.auto_rebuild_index:
+            logger.info("No index on disk; auto-rebuild is disabled.")
+            return False
+
+        documents = self.documents.list_documents()
+        if not documents:
+            return False
+
+        try:
+            # No artificial pacing: this is recovery, not a demo.
+            await self.start_indexing(step_delay=0.0)
+        except Exception as exc:
+            # Never prevent the app from starting — the UI still offers a
+            # manual "Build Index", and search reports the index as missing.
+            logger.error("Automatic index rebuild could not start: %s", exc)
+            return False
+
+        logger.info(
+            "No index found on disk — rebuilding from %d recovered document(s).",
+            len(documents),
+        )
+        return True
+
     def _restore_completed_state(self) -> list:
         """Repopulate a fresh indexer from what is already on disk.
 

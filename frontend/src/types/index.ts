@@ -17,6 +17,10 @@ export interface Health {
   index_ready: boolean
   supabase: boolean
   documents: number
+  storage: 'supabase' | 'local'
+  supabase_error: string | null
+  /** Whether destructive endpoints require the admin token. */
+  admin_protected: boolean
 }
 
 export interface DocumentSummary {

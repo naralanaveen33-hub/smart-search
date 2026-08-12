@@ -39,6 +39,17 @@ class Settings(BaseSettings):
     # boot writes six demo documents straight into production persistence.
     seed_demo_documents: bool = True
 
+    # The inverted index lives on local disk, which is ephemeral on most hosting
+    # platforms. Document text survives in Supabase, so when a fresh instance
+    # finds documents but no index it rebuilds one in the background instead of
+    # serving 409s until somebody clicks "Build Index".
+    auto_rebuild_index: bool = True
+
+    # Shared secret for the destructive endpoints (document delete, index reset,
+    # demo seed). Empty means unprotected, which is fine locally — set it for any
+    # deployment reachable from the internet.
+    admin_token: str = ""
+
     # BSBI defaults. block_size is the number of (term, doc) postings held in
     # memory before a block is flushed to disk.
     #
@@ -87,6 +98,10 @@ class Settings(BaseSettings):
     @property
     def supabase_enabled(self) -> bool:
         return bool(self.supabase_url and self.supabase_service_key)
+
+    @property
+    def admin_protected(self) -> bool:
+        return bool(self.admin_token)
 
     def ensure_dirs(self) -> None:
         for path in (self.data_dir, self.blocks_dir, self.uploads_dir, self.index_dir):
