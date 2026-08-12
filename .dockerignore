@@ -1,0 +1,71 @@
+# Build context filter for the API image.
+#
+# The Dockerfile only COPYs backend/app and backend/data, so most of this is
+# defence in depth: it keeps the context small and makes it structurally
+# impossible for a secret or a build artifact to reach the daemon at all.
+
+# --- secrets: must never enter the build context ------------------------
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+*.pem
+*.key
+secrets/
+
+# --- version control ----------------------------------------------------
+.git
+.gitignore
+.gitattributes
+.github/
+
+# --- python ------------------------------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+**/.venv/
+venv/
+
+# --- backend runtime state (rebuilt in the container, never shipped) ----
+# Local blocks, uploads, the inverted index and the JSON store. Copying these
+# in would bake one machine's index into the image.
+backend/.data/
+backend/data/demo/*.tmp
+
+# --- tests: not installed in the production image -----------------------
+backend/tests/
+backend/pytest.ini
+backend/requirements-dev.txt
+
+# --- frontend: belongs to Vercel, never to this image -------------------
+frontend/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# --- other deployment targets & docs ------------------------------------
+render.yaml
+supabase/
+design/
+_to_delete/
+.playwright-mcp/
+*.md
+!backend/DEPLOY_RAILWAY.md
+
+# --- logs / OS / editor -------------------------------------------------
+*.log
+logs/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

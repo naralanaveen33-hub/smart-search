@@ -187,12 +187,17 @@ Failures are never silent. An unreachable project is logged at **error** on star
 
 ## Deploying
 
-Three pieces: a static frontend, a Python API, and Supabase. No Docker.
+Three pieces: a static frontend, a Python API, and Supabase.
 
 ```
-Vercel  (React build)   ──VITE_API_URL──▶  Render  (FastAPI)  ──▶  Supabase
-  frontend/vercel.json                      render.yaml              Postgres + Storage
+Vercel  (React build)   ──VITE_API_URL──▶  FastAPI API  ──▶  Supabase
+  frontend/vercel.json                      Render, or                Postgres + Storage
+                                            any Docker host
 ```
+
+The API ships two equivalent targets: a Render blueprint (`render.yaml`) and a
+container image (`Dockerfile`). Pick one — they take the same environment
+variables and expose the same endpoints.
 
 ### 1. Supabase
 
@@ -232,6 +237,52 @@ Environment variables to set in the dashboard:
 | `INDEX_STEP_DELAY` | `0` |
 | `BLOCK_SIZE` | `10000` |
 | `PYTHON_VERSION` | `3.12.13` |
+
+### 2b. Backend in Docker (alternative to Render)
+
+Build context is the repository root; only `backend/` is copied in.
+
+```bash
+docker build -t swiftsearch-api .
+
+docker run -d --name swiftsearch-api -p 8000:8000 \
+  -e PORT=8000 \
+  -e SUPABASE_URL=...            `# your project URL` \
+  -e SUPABASE_SERVICE_KEY=...    `# service role key — secret` \
+  -e SUPABASE_BUCKET=swiftsearch-documents \
+  -e CORS_ORIGINS=https://your-frontend.vercel.app \
+  -e ADMIN_TOKEN=...             `# secrets.token_urlsafe(32)` \
+  -e SEED_DEMO_DOCUMENTS=false \
+  -e INDEX_STEP_DELAY=0 \
+  -e AUTO_REBUILD_INDEX=true \
+  -e BLOCK_SIZE=10000 \
+  swiftsearch-api
+```
+
+Never bake secrets in: no `.env` file reaches the image (`.dockerignore`
+excludes them and the `Dockerfile` never copies one), and every value above is
+supplied at runtime. Use your host's secret store rather than `-e` in
+production. `--env-file` works locally.
+
+| Property | Value |
+| --- | --- |
+| Base image | `python:3.12-slim` (multi-stage; deps in a venv) |
+| Runs as | non-root `swiftsearch` (uid 10001) |
+| Listens on | `0.0.0.0:$PORT` — never a hardcoded port |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health check | built in, hits `/api/health` |
+| Writable state | `/data` (`SWIFTSEARCH_DATA_DIR`) — index, blocks, text cache |
+| Image size | ~336 MB |
+
+`/data` is ephemeral by design. The corpus and its extracted text live in
+Supabase, so a replaced container rebuilds the index on boot
+(`AUTO_REBUILD_INDEX=true`) rather than serving 409s. Mount a volume there only
+if you want to skip that rebuild.
+
+Any host that runs a long-lived container works — Fly.io, Railway, Render (as a
+Docker service), a VPS. Avoid serverless/function platforms: BSBI indexing is a
+long-running background task and `/api/index/events` is a persistent SSE stream,
+and request-scoped runtimes cut both off.
 
 ### 3. Frontend on Vercel
 
