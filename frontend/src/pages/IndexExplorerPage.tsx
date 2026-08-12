@@ -13,7 +13,8 @@ const PAGE_SIZE = 8
 
 export function IndexExplorerPage() {
   const { status } = useIndexing()
-  const [term, setTerm] = useState('machine')
+  const [term, setTerm] = useState('')
+  const [seeded, setSeeded] = useState(false)
   const [tab, setTab] = useState<TabKey>('postings')
   const [page, setPage] = useState(0)
   const debounced = useDebounced(term, 250)
@@ -23,9 +24,27 @@ export function IndexExplorerPage() {
     [debounced, status?.state],
   )
   const { data: vocabulary } = useAsync(
-    () => api.vocabulary(debounced.trim().slice(0, 3), 12),
+    async () => {
+      const prefix = debounced.trim().slice(0, 3)
+      const matched = await api.vocabulary(prefix, 12)
+      if (!prefix || matched.total > 0) return { ...matched, filtered: Boolean(prefix) }
+      // Nothing in the index starts with what was typed. Falling back to the
+      // most common terms keeps the panel usable — otherwise a term that misses
+      // empties the one control that could get the user back to a real term,
+      // and a perfectly good index looks empty.
+      return { ...(await api.vocabulary('', 12)), filtered: false }
+    },
     [debounced.slice(0, 3), status?.state],
   )
+
+  // The starting term comes from the index itself. A hardcoded default only
+  // exists in the bundled demo corpus, so on any other corpus the page would
+  // open on "not in the vocabulary".
+  useEffect(() => {
+    if (seeded || term || !vocabulary?.terms.length) return
+    setSeeded(true)
+    setTerm(vocabulary.terms[0].term)
+  }, [vocabulary, seeded, term])
 
   useEffect(() => setPage(0), [debounced])
 
@@ -94,13 +113,26 @@ export function IndexExplorerPage() {
 
           {error && <Banner tone="error">{error}</Banner>}
 
-          {loading && !info && <Card className="h-48 animate-pulse" />}
+          {loading && !info && term.trim() && <Card className="h-48 animate-pulse" />}
 
           {info && !info.found && (
             <Card padded={false}>
               <EmptyState
                 title={`"${term}" is not in the vocabulary`}
-                description={`The query normalizes to "${info.normalized}", which has no postings list. Try a term from the vocabulary panel.`}
+                description={`The query normalizes to "${info.normalized}", which has no postings list. The index holds ${formatNumber(vocabulary?.total ?? 0)} terms — pick one from the vocabulary panel.`}
+              />
+            </Card>
+          )}
+
+          {/* Keyed off the live input, not the debounced copy: the seeded term
+              lands in the box 250ms before it reaches the query, and gating on
+              the debounced value flashes "Pick a term" over a filled box. */}
+          {!term.trim() && (
+            <Card padded={false}>
+              <EmptyState
+                icon={<Binary size={22} />}
+                title="Pick a term"
+                description="Type a term above, or choose one from the vocabulary panel, to see its postings list."
               />
             </Card>
           )}
@@ -255,7 +287,9 @@ export function IndexExplorerPage() {
           <div className="border-b border-line px-4 py-3">
             <h2 className="text-[13px] font-semibold">Vocabulary</h2>
             <p className="mt-0.5 text-[11px] text-muted">
-              {formatNumber(vocabulary?.total ?? 0)} matching terms
+              {vocabulary?.filtered
+                ? `${formatNumber(vocabulary.total)} matching terms`
+                : `Most frequent of ${formatNumber(vocabulary?.total ?? 0)} terms`}
             </p>
           </div>
           <ul className="max-h-[420px] overflow-y-auto">
