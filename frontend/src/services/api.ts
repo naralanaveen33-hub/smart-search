@@ -77,34 +77,80 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Delays before re-attempting a request that never reached the server.
+ *
+ * Free hosting tiers (Render, Fly, Railway) suspend an idle instance and only
+ * start it again when a request arrives. That cold start takes far longer than
+ * the browser will wait, so the first call after a quiet period always fails
+ * even though nothing is wrong. Retrying across ~35s covers a typical wake-up;
+ * a backend that is genuinely down still fails, just a little later.
+ */
+const WAKE_RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 18_000]
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Whether a failed attempt can be safely repeated.
+ *
+ * Only requests that never reached the server are retried, and only when the
+ * method carries no side effect — replaying an upload or an index start could
+ * duplicate work the server may in fact have received.
+ */
+function isReplayable(init?: RequestInit): boolean {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  return method === 'GET' || method === 'HEAD'
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAdminToken()
   const headers: Record<string, string> = {}
   if (!(init?.body instanceof FormData)) headers['Content-Type'] = 'application/json'
   if (token) headers['X-Admin-Token'] = token
 
-  let response: Response
-  try {
-    response = await fetch(`${BASE}${path}`, {
+  const send = () =>
+    fetch(`${BASE}${path}`, {
       ...init,
       headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
     })
-  } catch {
+
+  let response: Response
+  try {
+    response = await send()
+  } catch (firstError) {
     // fetch() rejects with an opaque TypeError for every network-level
-    // failure, and the browser deliberately withholds the reason. For a
-    // cross-origin API the overwhelmingly common cause is CORS: the request
-    // reached the server and was answered, but the response lacked an
-    // Access-Control-Allow-Origin header, so the browser discarded it. Saying
-    // only "is it running?" sends people to check a backend that is healthy.
-    const crossOrigin = BASE.startsWith('http') && !BASE.startsWith(window.location.origin)
-    throw new ApiError(
-      crossOrigin
-        ? `Could not reach the API at ${BASE}. Either it is down, or it is not allowing ` +
-          `requests from ${window.location.origin} — add that origin to CORS_ORIGINS on the ` +
-          'backend. The browser console will show a CORS error if that is the cause.'
-        : 'Cannot reach the SwiftSearch backend. Is it running?',
-      0,
-    )
+    // failure, and the browser deliberately withholds the reason. Two causes
+    // dominate: the instance is asleep and still starting, or the response
+    // lacked an Access-Control-Allow-Origin header and the browser discarded
+    // it. Retry first — a sleeping backend answers once it is awake.
+    let recovered: Response | null = null
+    if (isReplayable(init)) {
+      for (const delay of WAKE_RETRY_DELAYS_MS) {
+        await sleep(delay)
+        try {
+          recovered = await send()
+          break
+        } catch {
+          /* still waking, or genuinely unreachable — keep trying */
+        }
+      }
+    }
+
+    if (!recovered) {
+      const crossOrigin = BASE.startsWith('http') && !BASE.startsWith(window.location.origin)
+      throw new ApiError(
+        crossOrigin
+          ? `Could not reach the API at ${BASE}. On free hosting the server sleeps when idle ` +
+            'and can take up to a minute to wake — if it was idle, wait a moment and retry. ' +
+            `Otherwise it is down, or it is not allowing requests from ${window.location.origin} ` +
+            '(add that origin to CORS_ORIGINS on the backend; the browser console shows a CORS ' +
+            'error when that is the cause).'
+          : 'Cannot reach the SwiftSearch backend. Is it running?',
+        0,
+      )
+    }
+    response = recovered
+    void firstError
   }
 
   if (!response.ok) {
