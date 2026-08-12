@@ -15,7 +15,31 @@ import type {
   TermInfo,
 } from '@/types'
 
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+/**
+ * Where the backend lives.
+ *
+ * In development this is the relative `/api`, which the Vite dev server proxies
+ * to the local FastAPI process. In production it must be the absolute URL of
+ * the deployed API, supplied at build time as VITE_API_URL — Vite inlines it
+ * into the bundle, so it cannot be changed after the build.
+ *
+ * The value is normalised so the common ways of writing it all work:
+ *
+ *   https://api.example.com        -> https://api.example.com/api
+ *   https://api.example.com/api    -> https://api.example.com/api
+ *   https://api.example.com/api/   -> https://api.example.com/api
+ *
+ * Without this, a trailing slash produced `//index/explain` and omitting the
+ * suffix produced requests to `/index/explain`, while adding it twice produced
+ * `/api/api/index/explain`.
+ */
+export function resolveApiBase(configured?: string): string {
+  const raw = (configured ?? '').trim().replace(/\/+$/, '')
+  if (!raw) return '/api'
+  return raw.endsWith('/api') ? raw : `${raw}/api`
+}
+
+const BASE = resolveApiBase(import.meta.env.VITE_API_URL)
 
 /**
  * Shared secret for the endpoints that destroy data (document delete, index
@@ -82,6 +106,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (response.status === 204) return undefined as T
+
+  // A misconfigured deployment answers API calls with the SPA's index.html:
+  // the static host rewrites unknown paths to it and returns 200, so the
+  // request looks successful and only fails inside JSON.parse with
+  // "Unexpected token '<'". Diagnose it here instead of leaking that.
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    const servedBy = BASE.startsWith('http') ? BASE : `${window.location.origin}${BASE}`
+    throw new ApiError(
+      `Expected JSON from ${servedBy}${path} but received ${contentType || 'an unknown content type'}. ` +
+        'The frontend is pointing at itself rather than the backend — set VITE_API_URL ' +
+        'to your API URL (for example https://your-api.onrender.com/api) and redeploy.',
+      response.status,
+    )
+  }
+
   return (await response.json()) as T
 }
 
